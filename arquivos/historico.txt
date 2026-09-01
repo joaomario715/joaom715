@@ -1,0 +1,12 @@
+ENTRADA - abc - Carro
+ENTRADA - 123 - Carro
+ENTRADA - 123 - Carro
+ENTRADA - 123 - Carro
+ENTRADA - 123 - Carro
+ENTRADA - 1234 - Moto
+SAIDA - 123 - moto - R$ 33.00
+SAIDA - 123 - moto - R$ 493.00
+SAIDA - 123 - moto - R$ 228.00
+SAIDA - 123 - moto - R$ 13.00
+ENTRADA - JOAO - Carro
+SAIDA - JOAO - carro - R$ 23.00
