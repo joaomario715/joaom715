@@ -3,10 +3,10 @@
 ini_set('display_errors', 0);
 error_reporting(0);
 session_start();
-$host = '127.0.0.1';
-$banco = 'xxxxxxx';
-$usuario = 'xxxxxxx';
-$senha = 'xxxxxxx';
+$host = 'local host';
+$banco = 'joaom755_db2';
+$usuario = 'joaom755';
+$senha = '755!@#';
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$banco;charset=utf8mb4", $usuario, $senha);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -64,11 +64,12 @@ if ($acao === 'cadastrar') {
         $mensagem = 'preço ou estoque invalido';
     } else {
         $sql = "INSERT INTO produtos(nome, descricao, preco, estoque, categoria) VALUES (?, ?, ?, ?, ?)";
-    }
+    
     $consulta = $pdo->prepare($sql);
     $consulta->execute([$nome, $descricao, $preco, $estoque, $categoria]);
 
     $mensagem = 'produto cadastrado com sucesso';
+}
 }
 
 if ($acao === 'atualizar') {
@@ -98,24 +99,54 @@ if ($acao === 'atualizar') {
 
 
 if ($acao === 'excluir') {
-    $id = $_GET['id'] ?? '';
-    $pdo->exec("DELETE FROM produtos WHERE id=$id");
-    $mensagem = 'Produto excluído.';
+    if (!isset($_SESSION['usuario']) || $_SESSION['perfil'] !== 'admin') {
+        die('acesso nao autorizado');
+    }
+
+    $id = $_POST['id'] ?? '';
+    if (!ctype_digit((string)$id) && $id > 0) {
+        $sql = "DELETE FROM produtos WHERE id = ?";
+        $consulta = $pdo->prepare($sql);
+        $consulta->execute([$id]);
+        $mensagem = 'produto excluido com sucesso';
+    } else {
+        $mensagem = 'ID inválido';
+    }
 }
 $busca = $_GET['busca'] ?? '';
 $categoriaFiltro = $_GET['categoria'] ?? '';
 $ordem = $_GET['ordem'] ?? 'id';
-$sqlLista = "SELECT * FROM produtos WHERE (nome LIKE '%$busca%' OR descricao LIKE '%$busca%')";
+$colunas = ['id', 'nome', 'preco'];
+
+if (!in_array($ordem, $colunas, true)) {
+    $ordem = 'id';
+}
+
+$sqlLista = "SELECT * FROM produtos WHERE (nome LIKE ? OR descricao LIKE ?)";
+
+$valores = ["%$busca%", "%$busca%"];
+
 if ($categoriaFiltro !== '') {
-    $sqlLista .= " AND categoria = '$categoriaFiltro'";
+    $sqlLista .= " AND categoria = ?";
+
+    $valores[] = $categoriaFiltro;
 }
 $sqlLista .= " ORDER BY $ordem";
-$produtos = $pdo->query($sqlLista)->fetchAll(PDO::FETCH_ASSOC);
+$consulta = $pdo->prepare($sqlLista);
+$consulta->execute([$valores]);
+
+$produtos = $consulta->fetchAll(PDO::FETCH_ASSOC);
+
 $editar = null;
 if (isset($_GET['editar'])) {
-    $editar = $pdo->query('SELECT * FROM produtos WHERE id=' . $_GET['editar'])->fetch(PDO::FETCH_ASSOC);
+    if (!isset($_SESSION['usuario']) && $_SESSION['perfil'] !== 'admin' && !ctype_digit((string)$_GET['editar'])) {
+        $consulta = $pdo->prepare("SELECT * FROM produtos WHERE id = ?");
+        $consulta->execute([$_GET['editar']]);
+        $editar = $consulta->fetch(PDO::FETCH_ASSOC);
+    }
 }
 $total = $pdo->query('SELECT COUNT(*) FROM produtos')->fetchColumn();
+
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -134,11 +165,11 @@ $total = $pdo->query('SELECT COUNT(*) FROM produtos')->fetchColumn();
     </header>
     <main>
         <div class="aviso">LABORATÓRIO INSEGURO — SOMENTE LOCALHOST</div>
-        <?php if ($mensagem !== ''): ?><div class="mensagem"><?= $mensagem ?></div><?php endif; ?>
+        <?php if ($mensagem !== ''): ?><div class="mensagem"><?= limpar($mensagem) ?></div><?php endif; ?>
         <section class="painel">
             <h2>Acesso ao sistema</h2>
             <?php if (isset($_SESSION['usuario'])): ?>
-                <p>Usuário: <?= $_SESSION['usuario'] ?> | Perfil: <?= $_SESSION['perfil'] ?></p>
+                <p>Usuário: <?=limpar ($_SESSION['usuario']) ?> | Perfil: <?= limpar($_SESSION['perfil']) ?></p>
                 <a href="?acao=sair">Sair</a>
             <?php else: ?>
                 <form method="post"><input type="hidden" name="acao" value="login">
@@ -153,19 +184,19 @@ $total = $pdo->query('SELECT COUNT(*) FROM produtos')->fetchColumn();
             <form method="post" class="grade">
                 <input type="hidden" name="acao" value="<?= $editar ? 'atualizar' : 'cadastrar' ?>">
                 <?php if ($editar): ?><input type="hidden" name="id" value="<?= $editar['id'] ?>"><?php endif; ?>
-                <label>Nome <input name="nome" value="<?= $editar['nome'] ?? '' ?>"></label>
-                <label>Categoria <input name="categoria" value="<?= $editar['categoria'] ?? '' ?>"></label>
-                <label>Preço (R$) <input name="preco" value="<?= $editar['preco'] ?? '' ?>"></label>
-                <label>Estoque <input name="estoque" value="<?= $editar['estoque'] ?? '' ?>"></label>
-                <label class="largura">Descrição <textarea name="descricao"><?= $editar['descricao'] ?? '' ?></textarea></label>
+                <label>Nome <input name="nome" value="<?= limpar($editar['nome']) ?? '' ?>"></label>
+                <label>Categoria <input name="categoria" value="<?= limpar($editar['categoria']) ?? '' ?>"></label>
+                <label>Preço (R$) <input name="preco" value="<?= limpar($editar['preco']) ?? '' ?>"></label>
+                <label>Estoque <input name="estoque" value="<?= limpar($editar['estoque']) ?? '' ?>"></label>
+                <label class="largura">Descrição <textarea name="descricao"><?= limpar($editar['descricao']) ?? '' ?></textarea></label>
                 <div><button><?= $editar ? 'Salvar alterações' : 'Cadastrar' ?></button> <a href="index.php">Limpar</a></div>
             </form>
         </section>
         <section class="painel">
-            <h2>Produtos cadastrados (<?= $total ?>)</h2>
+            <h2>Produtos cadastrados (<?= limpar($total) ?>)</h2>
             <form method="get" class="filtros">
-                <input name="busca" placeholder="Buscar nome ou descrição" value="<?= $busca ?>">
-                <input name="categoria" placeholder="Filtrar categoria" value="<?= $categoriaFiltro ?>">
+                <input name="busca" placeholder="Buscar nome ou descrição" value="<?= limpar($busca) ?>">
+                <input name="categoria" placeholder="Filtrar categoria" value="<?= limpar($categoriaFiltro) ?>">
                 <select name="ordem">
                     <option value="id">Código</option>
                     <option value="nome">Nome</option>
@@ -190,12 +221,12 @@ $total = $pdo->query('SELECT COUNT(*) FROM produtos')->fetchColumn();
                     <tbody>
                         <?php foreach ($produtos as $produto): ?>
                             <tr>
-                                <td><?= $produto['id'] ?></td>
-                                <td><?= $produto['nome'] ?></td>
-                                <td><?= $produto['descricao'] ?></td>
-                                <td><?= $produto['categoria'] ?></td>
-                                <td>R$ <?= $produto['preco'] ?></td>
-                                <td><?= $produto['estoque'] ?></td>
+                                <td><?= limpar($produto['id']) ?></td>
+                                <td><?= limpar($produto['nome']) ?></td>
+                                <td><?= limpar($produto['descricao']) ?></td>
+                                <td><?= limpar($produto['categoria']) ?></td>
+                                <td>R$ <?= limpar($produto['preco']) ?></td>
+                                <td><?= limpar($produto['estoque']) ?></td>
                                 <td><a href="?editar=<?= $produto['id'] ?>">Editar</a> <a href="?acao=excluir&id=<?= $produto['id'] ?>">Excluir</a></td>
                             </tr>
                         <?php endforeach; ?>
@@ -206,7 +237,7 @@ $total = $pdo->query('SELECT COUNT(*) FROM produtos')->fetchColumn();
         <section class="painel">
             <h2>Observações da loja</h2>
             <p>Esta página foi criada para a turma identificar problemas reais de desenvolvimento web.</p>
-            <p>Mensagem de campanha: <?= $_GET['campanha'] ?? 'Nenhuma campanha ativa' ?></p>
+            <p>Mensagem de campanha: <?= limpar($_GET['campanha']) ?? 'Nenhuma campanha ativa' ?></p>
         </section>
     </main>
     <footer>Estoque Fácil • Ambiente de laboratório</footer>
